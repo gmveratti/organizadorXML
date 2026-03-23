@@ -8,7 +8,7 @@ O **Organizador de XML Fiscais** é uma ferramenta de alta performance desenvolv
 
 Se você deseja apenas utilizar a ferramenta sem configurar um ambiente de programação:
 
-1. Acesse a aba **[Releases](https://github.com/seu-usuario/organizadorXML/releases)** deste repositório.
+1. Acesse a aba **[Releases]([https://github.com/gmveratti/organizadorXML/releases/tag/Execut%C3%A1vel])** deste repositório.
 2. Baixe o arquivo `OrganizadorXML.exe`.
 3. Execute o programa (não requer instalação).
 4. Selecione a **Pasta Origem** (onde estão seus XMLs bagunçados) e a **Pasta Destino**.
