@@ -50,11 +50,18 @@ Segurança é prioridade em documentos fiscais. O script gerencia falhas de form
 Para rodar o código-fonte ou gerar seu próprio executável:
 
 ### Requisitos
-* Python 3.13+
+* [uv](https://docs.astral.sh/uv/) (Gerenciador de pacotes e projetos Python ultra-rápido)
+* Python 3.13+ (Instalado automaticamente pelo `uv` se necessário)
 * Biblioteca `tkinter` (Nativa no Windows. No Linux/WSL use: `sudo apt install python3-tk`)
 
-### Gerar Executável com Ícone
-Se você tiver o ícone na pasta `assets/`, utilize o comando abaixo no PowerShell:
+### Executar o Código-Fonte
+Para rodar o script diretamente usando o `uv`, utilize o comando:
 ```powershell
-pyinstaller --noconsole --onefile --icon=assets/icon.ico main.py
+uv run main.py
+```
+
+### Gerar Executável com Ícone
+As dependências de build (como o `pyinstaller`) já estão configuradas no `pyproject.toml`. Para compilar preservando o ícone, utilize o comando abaixo no PowerShell (na raiz do projeto):
+```powershell
+uv run pyinstaller --noconsole --onefile --icon=assets/icon.ico main.py
 ```
