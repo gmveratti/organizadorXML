@@ -28,7 +28,7 @@ jobs:
 
     - name: Compilar com PyInstaller
       run: |
-        pyinstaller --noconsole --onefile --icon=assets/icon.ico --add-data "assets;assets" --name "OrganizadorXML" main.py
+        pyinstaller --noconsole --onefile --icon=assets/icon.ico --add-data "assets;assets" --add-data "bin;bin" --name "OrganizadorXML" main.py
 
     - name: Disponibilizar o Executável (Artifact)
       uses: actions/upload-artifact@v4
