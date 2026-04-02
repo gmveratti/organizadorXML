@@ -1,67 +1,56 @@
-# 📑 Organizador de XML Fiscais
+# 📑 Organizador de XML Fiscais v3
 
-O **Organizador de XML Fiscais** é uma ferramenta de alta performance desenvolvida para automação de processos contábeis e fiscais. Ele resolve o problema de triagem de grandes volumes de arquivos, organizando milhares de XMLs em segundos com base na data de emissão real contida no documento.
+O **Organizador de XML Fiscais** é uma ferramenta de alta performance para automação de triagem contábil. Ele resolve o problema de grandes volumes de documentos, organizando milhares de XMLs em segundos com base na data de emissão real, agora com suporte total a arquivos compactados aninhados.
 
 ---
 
 ## 🚀 Como baixar e usar (Executável)
 
-Se você deseja apenas utilizar a ferramenta sem configurar um ambiente de programação:
+O executável é gerado automaticamente via **GitHub Actions** a cada atualização:
 
-1. Acesse a aba **[Releases]([https://github.com/gmveratti/organizadorXML/releases/tag/Execut%C3%A1vel])** deste repositório.
-2. Baixe o arquivo `OrganizadorXML.exe`.
-3. Execute o programa (não requer instalação).
-4. Selecione a **Pasta Origem** (onde estão seus XMLs bagunçados) e a **Pasta Destino**.
-5. Escolha o modo de organização e clique em **Iniciar**.
+1. Acesse a aba **[Actions](https://github.com/gmveratti/organizadorXML/actions)**.
+2. Selecione a última execução bem-sucedida do workflow "Compilar Executável Windows".
+3. Desça até a seção **Artifacts** e baixe o `OrganizadorXML-Windows`.
+4. Extraia o ZIP e execute o `OrganizadorXML.exe` (não requer instalação).
 
 ---
 
-## ✨ Funcionalidades Principais
+## ✨ Funcionalidades v3
 
 | Recurso | Descrição |
 | :--- | :--- |
-| **Interface Gráfica** | GUI amigável com barra de progresso, contador de arquivos e cronômetro. |
-| **Alta Performance** | Processamento paralelo (*Multithreading*) para lidar com 50.000+ arquivos rapidamente. |
-| **Busca Recursiva** | Varre automaticamente todas as subpastas dentro do diretório selecionado. |
-| **Limpeza Inteligente** | Após mover os arquivos, o script remove as pastas antigas (apenas se estiverem vazias). |
-| **Prevenção de Perda** | Caso existam arquivos com nomes iguais em pastas diferentes, o script renomeia automaticamente (ex: `nota_1.xml`) para evitar sobrescrita. |
+| **Extração Recursiva** | Motor estilo "cebola": extrai ZIPs dentro de ZIPs infinitamente (limitado a 5 camadas). |
+| **Híbrido de Origem** | Botões dedicados para selecionar uma **Pasta** inteira ou um unico **Ficheiro** (.zip/.rar). |
+| **RAM Ultra-Low** | Lê apenas os primeiros 8 KB (Header) de cada XML para extrair a data, poupando gigabytes de RAM. |
+| **Segurança Ativa** | Proteção contra *Zip Slip* (Path Traversal) e *Zip Bombs* integradas no motor. |
+| **Log de Erros Real** | Gera um arquivo físico `log_erros.txt` na pasta de erros detalhando cada falha. |
+| **Limpeza Automática** | Remove pastas vazias de origem e arquivos temporários de extração ao concluir. |
 
 ### 📂 Modos de Organização
 
-Você pode escolher entre três estruturas de pastas no destino:
-* **Mês e Ano:** Cria uma pasta para o Ano e subpastas para o Mês (Ex: `2022/2022.06`).
-* **Somente Ano:** Coloca todos os arquivos do ano em uma única pasta (Ex: `2022/`).
-* **Somente Mês:** Organiza por mês e ano na raiz (Ex: `06.2022/`).
+* **Mês e Ano:** Cria estrutura `Ano/Ano.Mês` (Ex: `2024/2024.05`).
+* **Somente Ano:** Todos os arquivos do ano em uma pasta única (Ex: `2024/`).
+* **Somente Mês:** Organiza por mês e ano na raiz (Ex: `05.2024/`).
 
 ---
 
-## 🛠️ Tratamento de Erros e Logs
+## 🛠️ Requisitos de Sistema
 
-Segurança é prioridade em documentos fiscais. O script gerencia falhas de forma isolada:
+### Suporte a RAR
+Para suporte completo a arquivos `.rar` no Windows, o motor tenta localizar automaticamente o `UnRAR.exe` (nativamente incluído na instalação do WinRAR em `C:\Program Files\WinRAR\UnRAR.exe`). Se não for encontrado, o suporte RAR será desativado, mantendo apenas o suporte nativo a ZIP.
 
-1.  **Pasta de Erros:** Qualquer XML corrompido ou sem a tag de emissão (`<dhEmi>` ou `<dEmi>`) é movido para a pasta `xmls_com_erro/`.
-2.  **Relatório Detalhado:** Dentro dessa pasta, um arquivo `log_erros.txt` é gerado explicando o motivo exato da falha de cada arquivo.
-3.  **Ambiente Híbrido:** O script detecta automaticamente se você está rodando no **Windows nativo** ou no **WSL**, tratando os caminhos de diretório corretamente em ambos.
-
----
-
-## 💻 Desenvolvimento e Compilação
-
-Para rodar o código-fonte ou gerar seu próprio executável:
-
-### Requisitos
-* [uv](https://docs.astral.sh/uv/) (Gerenciador de pacotes e projetos Python ultra-rápido)
-* Python 3.13+ (Instalado automaticamente pelo `uv` se necessário)
-* Biblioteca `tkinter` (Nativa no Windows. No Linux/WSL use: `sudo apt install python3-tk`)
-
-### Executar o Código-Fonte
-Para rodar o script diretamente usando o `uv`, utilize o comando:
+### Desenvolvimento
+Se deseja rodar o código-fonte via [uv](https://docs.astral.sh/uv/):
 ```powershell
+# Executar a aplicação
 uv run main.py
+
+# Compilar localmente (Windows)
+uv run pyinstaller --noconsole --onefile --icon=assets/icon.ico --add-data "assets;assets" --name "OrganizadorXML" main.py
 ```
 
-### Gerar Executável com Ícone
-As dependências de build (como o `pyinstaller`) já estão configuradas no `pyproject.toml`. Para compilar preservando o ícone, utilize o comando abaixo no PowerShell (na raiz do projeto):
-```powershell
-uv run pyinstaller --noconsole --onefile --icon=assets/icon.ico main.py
-```
+---
+
+## 💻 Arquitetura de Performance
+
+O projeto utiliza um padrão de **Fila (Deque)** para o motor de extração, garantindo que o processamento de arquivos compactados seja linear e não cause estouro de pilha (*Stack Overflow*). A movimentação de arquivos é protegida por verificações de duplicidade, renomeando automaticamente conflitos para evitar sobrescrita de dados fiscais importantes.
