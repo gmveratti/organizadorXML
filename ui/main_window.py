@@ -1,9 +1,19 @@
 import os
 import re
 import queue
+import sys
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from core.worker import ProcessingWorker
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 def format_path(input_path):
     """Formata o caminho dependendo se está no Windows ou no WSL."""
@@ -22,6 +32,14 @@ class XMLOrganizerApp:
         self.root.title("Organizador de XML Fiscais v3")
         self.root.geometry("650x550")
         self.root.resizable(False, False)
+        
+        # Define o ícone da janela
+        try:
+            icon_path = resource_path(os.path.join("assets", "icon.ico"))
+            if os.path.exists(icon_path):
+                self.root.iconbitmap(icon_path)
+        except Exception:
+            pass # Ignora se não conseguir carregar o ícone
         
         self.queue = queue.Queue()
         self.is_processing = False
