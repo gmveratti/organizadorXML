@@ -45,6 +45,10 @@ class XMLOrganizerApp:
         self.queue = queue.Queue()
         self.is_processing = False
         self.start_time = 0
+        self.worker_thread = None
+        
+        # Intercepta o evento de fechamento da janela (X)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         self.setup_ui()
         self.check_queue() 
@@ -143,7 +147,19 @@ class XMLOrganizerApp:
         self.src_entry.config(state=tk.DISABLED)
         self.dst_entry.config(state=tk.DISABLED)
 
-        threading.Thread(target=ProcessingWorker(src_dir, dst_dir, mode, self.queue).run, daemon=True).start()
+        # Salva a referência da thread
+        self.worker_thread = ProcessingWorker(src_dir, dst_dir, mode, self.queue)
+        self.worker_thread.start()
+
+    def on_closing(self):
+        """Garante a eliminação de pastas ocultas ao fechar o programa agressivamente."""
+        if self.is_processing:
+            if messagebox.askokcancel("Aviso de Segurança", "O processamento está em andamento.\\nDeseja cancelar e fechar?\\n(Isso garantirá a exclusão segura dos arquivos temporários)"):
+                if self.worker_thread and self.worker_thread.is_alive():
+                    self.worker_thread.stop()
+                self.root.destroy()
+        else:
+            self.root.destroy()
 
     def check_queue(self):
         if self.is_processing:
