@@ -5,26 +5,20 @@ import zipfile
 from collections import deque
 from pathlib import Path
 
-def _get_resource_path(relative_path):
-    """ Get absolute path to resource, works for dev and for PyInstaller """
-    try:
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-    return Path(base_path) / relative_path
-
 try:
     import rarfile
     if os.name == 'nt':
-        # 1. Tenta a pasta bin local (ou recursos do PyInstaller)
-        local_unrar = _get_resource_path("bin/UnRAR.exe")
-        # 2. Tenta o caminho padrão do WinRAR
-        winrar_default = Path(r"C:\Program Files\WinRAR\UnRAR.exe")
+        # Deteta se está a correr como script local ou como .exe compilado
+        try:
+            base_path = sys._MEIPASS
+        except AttributeError:
+            base_path = os.path.abspath(".")
+            
+        # Aponta dinamicamente para a sua pasta bin
+        unrar_path = os.path.join(base_path, "bin", "UnRAR.exe")
         
-        if local_unrar.exists():
-            rarfile.UNRAR_TOOL = str(local_unrar)
-        elif winrar_default.exists():
-            rarfile.UNRAR_TOOL = str(winrar_default)
+        if Path(unrar_path).exists():
+            rarfile.UNRAR_TOOL = unrar_path
             
     RAR_SUPPORT = True
 except ImportError:
