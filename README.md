@@ -6,12 +6,12 @@ O **Organizador de XML Fiscais** é uma ferramenta de alta performance para auto
 
 ## 🚀 Como baixar e usar (Executável)
 
-O executável é gerado automaticamente via **GitHub Actions** a cada atualização:
+Se você deseja apenas utilizar a ferramenta sem configurar um ambiente de programação, siga estes passos simples:
 
-1. Acesse a aba **[Actions](https://github.com/gmveratti/organizadorXML/actions)**.
-2. Selecione a última execução bem-sucedida do workflow "Compilar Executável Windows".
-3. Desça até a seção **Artifacts** e baixe o `OrganizadorXML-Windows`.
-4. Extraia o ZIP e execute o `OrganizadorXML.exe` (não requer instalação).
+1. Acesse a aba **[Releases](https://github.com/gmveratti/organizadorXML/releases)** deste repositório.
+2. Baixe o executável `OrganizadorXML.exe` da versão mais recente.
+3. Certifique-se de que o arquivo não esteja bloqueado pelo Windows (Botão direito > Propriedades > Desbloquear, se necessário).
+4. Basta executar o programa (não requer instalação).
 
 ---
 
@@ -46,7 +46,7 @@ Se deseja rodar o código-fonte via [uv](https://docs.astral.sh/uv/):
 uv run main.py
 
 # Compilar localmente (Windows)
-uv run pyinstaller --noconsole --onefile --icon=assets/icon.ico --add-data "assets;assets" --name "OrganizadorXML" main.py
+uv run pyinstaller --noconsole --onefile --icon=assets/icon.ico --add-data "assets;assets" --add-data "bin;bin" --name "OrganizadorXML" main.py
 ```
 
 ---
