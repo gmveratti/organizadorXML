@@ -1,0 +1,37 @@
+name: Compilar Executável Windows
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Permite disparar a compilação manualmente clicando num botão no GitHub
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Baixar o código do repositório
+      uses: actions/checkout@v4
+
+    - name: Configurar Python 3.13
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13' # Mesma versão definida no seu README
+
+    - name: Instalar Dependências
+      run: |
+        python -m pip install --upgrade pip
+        # Instala o PyInstaller e a biblioteca de RAR (e o uv, caso precise ler o pyproject.toml)
+        pip install pyinstaller rarfile uv
+        # Se você tiver outras dependências locais, o uv ajuda a sincronizar:
+        uv pip install --system -e . 
+
+    - name: Compilar com PyInstaller
+      run: |
+        pyinstaller --noconsole --onefile --icon=assets/icon.ico --add-data "assets;assets" --name "OrganizadorXML" main.py
+
+    - name: Disponibilizar o Executável (Artifact)
+      uses: actions/upload-artifact@v4
+      with:
+        name: OrganizadorXML-Windows
+        path: dist/OrganizadorXML.exe
