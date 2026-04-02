@@ -1,92 +1,122 @@
+# core/archive_handler.py
 import os
 import tempfile
 import zipfile
 import shutil
-import uuid
+from collections import deque
+from pathlib import Path
 
 try:
     import rarfile
+    # Tenta configurar o UnRAR no Windows nativo
+    if os.name == 'nt':
+        unrar_path = r"C:\Program Files\WinRAR\UnRAR.exe"
+        if os.path.exists(unrar_path):
+            rarfile.UNRAR_TOOL = unrar_path
     RAR_SUPPORT = True
 except ImportError:
-    rarfile = None
     RAR_SUPPORT = False
+
+_ARCHIVE_EXTENSIONS = ('.rar', '.zip')
 
 class ArchiveHandler:
     def __init__(self):
-        # Cria pasta temporária
+        # Cria a pasta temporária invisível para o trabalho pesado
         self.temp_dir = tempfile.mkdtemp(prefix="organizador_xml_")
 
-    def _extract_archive(self, file_path):
-        """Lógica interna para extrair um arquivo específico e retorna a pasta de destino."""
-        unique_id = str(uuid.uuid4())[:8]
-        extract_path = os.path.join(self.temp_dir, f"{os.path.basename(file_path)[:-4]}_{unique_id}")
+    def _is_safe_path(self, extract_path: str, target_path: str) -> bool:
+        """Evita ataques de Path Traversal (Zip Slip) e Zip Bombs."""
+        abs_extract = os.path.abspath(extract_path)
+        abs_target = os.path.abspath(target_path)
+        return os.path.commonpath([abs_extract, abs_target]) == abs_extract
+
+    def _extract_archive(self, file_path: str, extract_path: str, delete_after: bool = False) -> list:
+        """Extrai um ficheiro e devolve uma lista de novos arquivos compactados encontrados dentro dele."""
+        new_archives = []
+        os.makedirs(extract_path, exist_ok=True)
         try:
-            if file_path.lower().endswith('.zip'):
-                with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                    zip_ref.extractall(extract_path)
-            elif file_path.lower().endswith('.rar') and RAR_SUPPORT:
-                with rarfile.RarFile(file_path, 'r') as rar_ref: # type: ignore
-                    rar_ref.extractall(extract_path)
-            return extract_path
+            if file_path.lower().endswith(".rar") and RAR_SUPPORT:
+                with rarfile.RarFile(file_path) as rf:
+                    for member in rf.infolist():
+                        if self._is_safe_path(extract_path, os.path.join(extract_path, member.filename)):
+                            rf.extract(member, path=extract_path)
+                            if member.filename.lower().endswith(_ARCHIVE_EXTENSIONS):
+                                new_archives.append(os.path.join(extract_path, member.filename))
+                                
+            elif file_path.lower().endswith(".zip"):
+                with zipfile.ZipFile(file_path) as zf:
+                    for member in zf.infolist():
+                        if self._is_safe_path(extract_path, os.path.join(extract_path, member.filename)):
+                            zf.extract(member, path=extract_path)
+                            if member.filename.lower().endswith(_ARCHIVE_EXTENSIONS):
+                                new_archives.append(os.path.join(extract_path, member.filename))
+            
+            # Apaga o zip APENAS se for temporário, para não estourar o disco
+            if delete_after:
+                os.remove(file_path)
         except Exception:
-            return None # Ignora silenciosamente arquivos corrompidos na extração
+            pass # Ficheiros corrompidos ou com senha são ignorados silenciosamente
+            
+        return new_archives
 
     def extract_and_find_xmls(self, source_path):
-        """Extrai e busca XMLs recursivamente, aceitando tanto arquivo único quanto pasta inteira."""
+        """O cérebro: Extrai infinitamente e retorna a lista limpa de todos os XMLs."""
         xml_files = []
-        archives_to_process = []
-        extracted_archives = set()
         
-        # 1. População Inicial da Fila de Arquivos
+        # --- FASE 1: Extração Superficial ---
         if os.path.isfile(source_path):
-            if source_path.lower().endswith(('.zip', '.rar')):
-                archives_to_process.append(os.path.abspath(source_path))
+            if source_path.lower().endswith('.xml'):
+                return [source_path]
+            
+            if source_path.lower().endswith(_ARCHIVE_EXTENSIONS):
+                # Extrai o arquivo raiz para a temp_dir (delete_after=False preserva o original!)
+                self._extract_archive(source_path, self.temp_dir, delete_after=False)
+                
         elif os.path.isdir(source_path):
             for root, _, files in os.walk(source_path):
                 for file in files:
-                    if file.lower().endswith(('.zip', '.rar')):
-                        archives_to_process.append(os.path.abspath(os.path.join(root, file)))
+                    if file.lower().endswith(_ARCHIVE_EXTENSIONS):
+                        file_path = os.path.join(root, file)
+                        extract_path = os.path.join(self.temp_dir, file[:-4])
+                        # Extrai (delete_after=False preserva o original!)
+                        self._extract_archive(file_path, extract_path, delete_after=False)
 
-        # 2. Processamento Recursivo de Extração
-        while archives_to_process:
-            current_archive = archives_to_process.pop(0)
-            
-            if current_archive in extracted_archives:
+        # --- FASE 2: Motor Recursivo (Descascando a cebola na pasta temporária) ---
+        archive_queue = deque()
+
+        # Alimenta a fila com os primeiros ZIPs/RARs que apareceram na extração inicial
+        for root, _, files in os.walk(self.temp_dir):
+            for f in files:
+                if f.lower().endswith(_ARCHIVE_EXTENSIONS):
+                    archive_queue.append(os.path.join(root, f))
+
+        # Roda infinitamente até não sobrar nenhum arquivo compactado dentro de outro
+        while archive_queue:
+            file_path = archive_queue.popleft()
+            if not os.path.exists(file_path):
                 continue
-                
-            extract_path = self._extract_archive(current_archive)
-            extracted_archives.add(current_archive)
+            extract_path = os.path.dirname(file_path)
             
-            if extract_path and os.path.exists(extract_path):
-                # Verifica a pasta extraída procurando por novos zips/rars aninhados
-                for root, _, files in os.walk(extract_path):
-                    for file in files:
-                        if file.lower().endswith(('.zip', '.rar')):
-                            new_archive = os.path.abspath(os.path.join(root, file))
-                            if new_archive not in extracted_archives and new_archive not in archives_to_process:
-                                archives_to_process.append(new_archive)
+            # delete_after=True apaga o zip temporário após extraí-lo
+            new_archives = self._extract_archive(file_path, extract_path, delete_after=True)
+            archive_queue.extend(new_archives)
 
-        # 3. Varredura final pelos arquivos XML extraídos
-        dirs_to_scan = [self.temp_dir]
+        # --- FASE 3: Captura de XMLs ---
+        # 1. Usar o recurso moderno do Python (rglob) para varrer todos os subdiretórios da temp_dir
+        for p in Path(self.temp_dir).rglob("*.xml"):
+            xml_files.append(str(p))
+            
+        # 2. Resgatar XMLs que já estavam soltos e visíveis na origem, se for uma pasta
         if os.path.isdir(source_path):
-            dirs_to_scan.append(source_path)
-            
-        for d in dirs_to_scan:
-            for root, _, files in os.walk(d):
-                for file in files:
-                    if file.lower().endswith('.xml'):
-                        xml_files.append(os.path.join(root, file))
-                        
-        # Adiciona suporte se o usuário escolher sem querer apenas 1 XML solto
-        if os.path.isfile(source_path) and source_path.lower().endswith('.xml'):
-            if source_path not in xml_files:
-                xml_files.append(source_path)
-            
+            for p in Path(source_path).rglob("*.xml"):
+                xml_files.append(str(p))
+                
         return xml_files
 
     def cleanup(self):
-        """Remove a diretoria temporária."""
-        try:
-            shutil.rmtree(self.temp_dir)
-        except Exception:
-            pass
+        """Apaga os rastros temporários."""
+        if os.path.exists(self.temp_dir):
+            try:
+                shutil.rmtree(self.temp_dir)
+            except Exception:
+                pass
