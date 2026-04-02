@@ -4,6 +4,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.archive_handler import ArchiveHandler
 from core.organizer import organize_file
+from pathlib import Path
 
 class ProcessingWorker(threading.Thread):
     def __init__(self, source_dir, dest_dir, mode, msg_queue):
@@ -13,34 +14,42 @@ class ProcessingWorker(threading.Thread):
         self.mode = mode
         self.queue = msg_queue
         self.daemon = True
+        self.is_cancelled = False  # Flag para parada segura
+
+    def stop(self):
+        self.is_cancelled = True
 
     def run(self):
+        archive_handler = None
         try:
             self.queue.put(("START_EXTRACTION",))
-            
             archive_handler = ArchiveHandler()
-            xml_files = archive_handler.extract_and_find_xmls(self.source_dir)
+            
+            # Consome o gerador (Obrigatório para desenhar a barra de progresso Tkinter)
+            xml_files = list(archive_handler.extract_and_find_xmls(self.source_dir))
             
             total_files = len(xml_files)
             if total_files == 0:
                 self.queue.put(("NO_FILES",))
-                archive_handler.cleanup()
                 return
                 
             self.queue.put(("START_PROCESSING", total_files))
             
-            moved_count = 0
-            event_count = 0
-            error_count = 0
-            processed = 0
+            moved_count = event_count = error_count = processed = 0
+            error_logs = []
             
-            workers = os.cpu_count() * 2
+            # PREVENÇÃO I/O THRASHING: Capping conservador para manipulação de disco
+            workers = min(8, (os.cpu_count() or 1) + 4)
             
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 futures = {executor.submit(organize_file, path, self.dest_dir, self.mode): path for path in xml_files}
                 
                 for future in as_completed(futures):
-                    status, _ = future.result() # Ignoramos as mensagens de log
+                    if self.is_cancelled:
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        break
+
+                    status, log_msg = future.result() 
                     
                     if status == 'SUCCESS':
                         moved_count += 1
@@ -48,25 +57,37 @@ class ProcessingWorker(threading.Thread):
                         event_count += 1
                     else:
                         error_count += 1
+                        if log_msg:
+                            error_logs.append(log_msg)
                             
                     processed += 1
-                    # Otimização: atualiza a GUI a cada 50 arquivos
                     if processed % 50 == 0 or processed == total_files:
                         self.queue.put(("PROGRESS", processed, total_files))
+
+            if self.is_cancelled:
+                return
+
+            # GERAÇÃO DO ARQUIVO FÍSICO DE LOG DE ERROS E ALERTAS
+            if error_logs:
+                error_dir = Path(self.dest_dir) / 'xmls_com_erro'
+                error_dir.mkdir(exist_ok=True)
+                with open(error_dir / 'log_erros.txt', 'w', encoding='utf-8') as log_file:
+                    log_file.write(f"Total de erros: {len(error_logs)}\n" + "-"*40 + "\n")
+                    for log in error_logs:
+                        log_file.write(log + '\n')
             
-            archive_handler.cleanup()
-            
-            # Limpa pastas antigas APENAS se a origem for uma pasta (e não um ZIP solto)
-            if os.path.isdir(self.source_dir):
-                for root, dirs, files in os.walk(self.source_dir, topdown=False):
-                    for d in dirs:
-                        dir_path = os.path.join(root, d)
-                        try:
-                            os.rmdir(dir_path)
-                        except OSError:
-                            pass
+            # Limpeza moderna com pathlib (remove pastas vazias na origem)
+            src_path = Path(self.source_dir)
+            if src_path.is_dir():
+                for dir_path in sorted(src_path.rglob('*'), reverse=True):
+                    if dir_path.is_dir() and not any(dir_path.iterdir()):
+                        try: dir_path.rmdir()
+                        except OSError: pass
             
             self.queue.put(("DONE", total_files, moved_count, event_count, error_count))
             
         except Exception as e:
             self.queue.put(("FATAL_ERROR", str(e)))
+        finally:
+            if archive_handler:
+                archive_handler.cleanup()  # Garantia de eliminação do vazamento
